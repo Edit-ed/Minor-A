@@ -8,6 +8,7 @@ note_list:list['Notepad'] = []
 current_user = None
 is_logged_in = False
 
+"""CLASSES"""
 class User:
     def __init__(self, full_name, username, password):
         self.full_name = full_name
@@ -16,17 +17,21 @@ class User:
 
     def __repr__(self):
         return f'{self.full_name=}, {self.username=}, {self.password=}'
-    
+
+ 
 class Notepad():
-    def __init__(self, owner, title, description, date_created):
+    def __init__(self, owner, title, description, date_created, date_updated=""):
         self.owner = owner
         self.title = title
         self.description = description
         self.date_created = date_created
+        self.date_updated = date_updated
 
     def __repr__(self):
-        return f'By: {self.owner}\n\t\t{self.title}\n{self.description}\nLast Updated: {self.date_created}'
+        return f'By: {self.owner}\n\t\t{self.title}\n{self.description}\nLast Updated: {self.date_updated}'
 
+
+"""HELPER FUNCTIONS"""
 def show_menu(has_account = False):
     if has_account:
         print("""
@@ -44,15 +49,34 @@ def show_menu(has_account = False):
 [2] Register
 """)
 
+
 def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
+
 
 def prompt(string, cast=str):
     """Inputs are casted into specific datatype to avoid error"""
     value = input(f"{string}: ").strip()
-    return cast(value)
+    try:
+        return cast(value)
+    except ValueError as e:
+        return print(f'{e}: Value should be a {cast}.')
 
 
+def index_correction(index):
+    """Grabs the right item from note_list"""
+    user_notes = [note for note in note_list if note.owner == current_user]
+    if index is None:
+        return
+    
+    if index < 1 or index > len(user_notes):
+        print("Index Out of Range.")
+        return None
+    
+    return user_notes[index-1]
+
+
+"""NOTES MANIPULATORS"""
 def find_user(username):
     for user in users:
         if user.username == username:
@@ -60,89 +84,134 @@ def find_user(username):
 
 
 def find_note(notepad):
+    """Finds a notepad from the current user"""
     global current_user
     for note in note_list:
-        if note.title == notepad:
-            if note.owner == current_user:
+        if note.owner == current_user:
+            if note.title == notepad:
                 return note
 
-
+    
 def list_notes():
+    """List all notes from the current user"""
     global current_user
     index = 0
-
-    print("""
-        NOTE LISTS:
-""")
-
-    if not note_list:
-        print("No list yet")
-        return
-    # print("Note List:")
-    note_list_table = PrettyTable(title="Note List", field_names=["Index", "Title", "Date Created"])
+    
+    has_list = False
+    note_list_table = PrettyTable(title="Note List", field_names=["Index", "Title", "Date Created", "Date Updated"])
     for note in note_list:
-        index += 1
         if note.owner == current_user:
-            note_list_table.add_row((index, note.title, note.date_created))
-    print(note_list_table)
+            index += 1
+            note_list_table.add_row((index, note.title, note.date_created, note.date_updated))
+            has_list = True
+    if has_list:
+        print(note_list_table)
+        return True
+    print("No list yet.")
+    return False
 
 
-def describe_note():
+def create_note():
+    """Notes created will only be accessible by the owner who made it"""
+    global note_list
+
     clear_screen()
-    list_notes()
-    note = find_note(prompt("Note Title"))
+    print("""
+        CREATE NOTE
+""")
+    note_title = prompt("Title")
+    note_description = prompt("Description")
+    date_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    note_list.append(Notepad(current_user, note_title, note_description, date_now, date_updated=date_now))
     clear_screen()
-    print(note)
+
 
 def update_note():
-    list_notes()
-    note = find_note(prompt("Note Title"))
+    """List the available notes for user to pick from and update note based on number"""
+    if not list_notes():
+        return
+    choice = prompt("Choose which Note to Update (By Number)", int)
+    match choice:
+        case '':
+            return "Invalid Input."
+    note = index_correction(choice)
+    if note is None:
+        return
+    note = index_correction(choice)
+    
     nt = prompt("New Title (Leave Blank to Stay Unchanged)")
     if nt != '':
         note.title = nt
     nd = prompt("New Description (Leave Blank to Stay Unchanged)")
     if nd != '':
         note.description = nd
+    note.date_updated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     clear_screen()
 
 
 def delete_note():
-    # use .remove()
-    list_notes()
-    choice = prompt("Choose which Item to Remove (By Number)", int)
-    confirm = prompt("Are you sure? y/n")
-    if confirm == 'y':
-        note_list.remove(note_list[choice-1])
-        clear_screen()
-        print("Note Deleted.")
-    elif confirm == 'n':
-        clear_screen()
-        print("Deletion Cancelled.")
+    """List the available notes for user to pick from and delete note based on number"""
+    
+    if not list_notes():
         return
+
+    choice = prompt("Choose which Item to Remove (By Number)", int)
+    match choice:
+        case '':
+            return "Invalid Input."
+    note = index_correction(choice) 
+    if note is not None:
+        confirm = prompt("Are you sure? y/n").lower()
+        if confirm == 'y':
+            note_list.remove(note)
+            clear_screen()
+            print("Note Deleted.")
+        elif confirm == 'n':
+            clear_screen()
+            print("Deletion Cancelled.")
+            return
+        else:
+            clear_screen()
+            print("Invalid Input.")
     else:
         clear_screen()
-        print("Invalid Input.")
-    
+        print("Index out of range.")    
 
 
+def describe_note():
+    """List the available notes for user to pick from and show the content of a note based on number"""
+    clear_screen()
+    if not list_notes():
+        return
+    choice = prompt("Choose which Note to Open (By Number)", int)
+    clear_screen()
+    note = index_correction(choice)
+    if note is None:
+        return 
+    print(note)
+
+
+"""USER FUNCTIONS"""
 def login():
     global is_logged_in
     global current_user
 
     clear_screen()
-
+    if not users:
+        print("No Users in List.")
+        return
     print("""
         LOG-IN
 """)
     us = find_user(prompt("User"))
     if us is None:
         clear_screen()
-        print("User does not exist")
+        print("User does not exist.")
         return
     pw = prompt("Password")
     if us.password != pw:
         clear_screen()
-        print("Wrong Password")
+        print("Wrong Password.")
         return
     clear_screen()
     current_user = us.username
@@ -175,20 +244,6 @@ def register():
     clear_screen()
 
 
-def create_note():
-    global note_list
-
-    clear_screen()
-    print("""
-        CREATE NOTE
-""")
-    note_title = prompt("Title")
-    note_description = prompt("Description")
-    date_created = datetime.now()
-    note_list.append(Notepad(current_user, note_title, note_description, date_created.strftime("%Y-%m-%d %H:%M:%S")))
-    clear_screen()
-
-
 def match_choice(choice, has_account = False):
     global is_logged_in
     global current_user
@@ -209,7 +264,7 @@ def match_choice(choice, has_account = False):
                 case '5':
                    describe_note()
                 case _:
-                    print("Invalid Input")
+                    print("Invalid Input.")
     else:
         match choice:
             case '0':
@@ -219,23 +274,21 @@ def match_choice(choice, has_account = False):
             case '2':
                 register()
             case _:
-                print("Invalid Input")
+                print("Invalid Input.")
 
 
-
+"""MAIN LOOP"""
 def main():
     clear_screen()
     while True:
+        print(f'\nCurrent User: {current_user}')
         show_menu(is_logged_in)
         choice = prompt("Choice")
         clear_screen()
         y = match_choice(choice, is_logged_in)
         if y is True:
             break
-        """
-        yey
-        """
 
                 
 if __name__ == "__main__":
-    main()
+    main() 
